@@ -5,6 +5,7 @@ type Config = {
     SERVER_PORT: number;
     AT_KEY: string;
     RT_KEY: string;
+    OTP_KEY: string;
     EMAIL: string;
     GMAIL_PASSWORD: string;
 };
@@ -30,6 +31,7 @@ const config: Config = {
     SERVER_PORT: parseInt(process.env.PORT, 10),
     AT_KEY: `${process.env.AT_SECRET_KEY}`,
     RT_KEY: `${process.env.RT_SECRET_KEY}`,
+    OTP_KEY: `${process.env.OTP_SECRET_KEY}`,
     EMAIL: `${process.env.EMAIL}`,
     GMAIL_PASSWORD: `${process.env.GMAIL_PASSWORD}`,
 };

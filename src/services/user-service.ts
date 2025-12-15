@@ -6,9 +6,18 @@ import {
     StudentSignup,
     StudentLogin,
     StudentUpdate,
+    StudentPwUpdate,
+    StudentLockStatusUpdate,
 } from "@/common/schemas";
 import prisma from "@/common/prisma-client";
-import {AdminDTO, StudentDTO, UserInToken, UserRole} from "@/common/types";
+import {
+    AdminDTO,
+    LockStatus,
+    OTPGenerationResult,
+    StudentDTO,
+    UserInToken,
+    UserRole,
+} from "@/common/types";
 import UserAlreadyExistError from "@/errors/user/user-already-exist";
 import {AuthToken, ResponseMessage} from "@/common/constants";
 import UserNotFoundError from "@/errors/user/user-not-found";
@@ -16,6 +25,7 @@ import WrongPasswordError from "@/errors/user/wrong-password";
 import jwtService from "./jwt-service";
 import InvalidTokenError from "@/errors/auth/invalid-token";
 import {Admin, Student} from "@prisma/client";
+import RequestToLockedAccount from "@/errors/user/user-is-locked";
 
 const saltOfRound = 10;
 
@@ -230,6 +240,7 @@ const loginAsAdmin = async (
         userId: validAdmin.adminId,
         username: validAdmin.username,
         role: UserRole.ADMIN,
+        email: null,
     };
 
     //create AT, RT
@@ -285,6 +296,7 @@ const refreshAdminToken = async (
             userId: adminDTO.adminId,
             username: adminDTO.username,
             role: UserRole.ADMIN,
+            email: null,
         };
 
         //create AT, RT
@@ -324,7 +336,7 @@ const deleteAdmin = async (adminId: string) => {
     });
 };
 
-//students
+// ------------------------------------ students ------------------------------------
 const checkUserPasswordMatch = async (
     studentId: string,
     password: string
@@ -396,6 +408,7 @@ const refreshStudentToken = async (
             userId: userDTO.studentId,
             username: userDTO.username,
             role: UserRole.STUDENT,
+            email: userDTO.email,
         };
 
         //create AT, RT
@@ -471,6 +484,27 @@ const getStudentDTO = async (studentId: string): Promise<StudentDTO | null> => {
         select: {
             studentId: true,
             studentCode: true,
+            email: true,
+            username: true,
+            createdAt: true,
+            deletedAt: true,
+        },
+    });
+
+    return student;
+};
+
+const getStudentDTOByEmail = async (
+    email: string
+): Promise<StudentDTO | null> => {
+    const student = await prisma.student.findUnique({
+        where: {
+            email: email,
+        },
+        select: {
+            studentId: true,
+            studentCode: true,
+            email: true,
             username: true,
             createdAt: true,
             deletedAt: true,
@@ -509,6 +543,11 @@ const getStudentDTOs = async (
             studentId: true,
             studentCode: true,
             username: true,
+            gender: true,
+            birthPlace: true,
+            phoneNumber: true,
+            email: true,
+            class: true,
             createdAt: true,
             deletedAt: true,
         },
@@ -552,6 +591,11 @@ const getStudentDTOByStudentCode = async (
             studentId: true,
             studentCode: true,
             username: true,
+            email: true,
+            gender: true,
+            birthPlace: true,
+            phoneNumber: true,
+            class: true,
             createdAt: true,
             deletedAt: true,
         },
@@ -568,6 +612,9 @@ const getValidStudent = async (
 
     if (!findByStudentCode)
         throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
+
+    if (findByStudentCode.lockStatus == true)
+        throw new RequestToLockedAccount(ResponseMessage.LOCKED);
 
     // Check whether password is valid
     const match = compareSync(password, findByStudentCode.password);
@@ -601,6 +648,7 @@ const loginAsStudent = async (
         userId: validStudent.studentId,
         username: validStudent.username,
         role: UserRole.STUDENT,
+        email: validStudent.email,
     };
 
     //create AT, RT
@@ -654,14 +702,6 @@ const updateStudent = async (
                 ResponseMessage.USER_ALREADY_EXISTS
             );
     }
-    if (validPayload.password && validPayload.lastPassword) {
-        const match = await checkUserPasswordMatch(
-            studentId,
-            validPayload.lastPassword
-        );
-        if (!match)
-            throw new WrongPasswordError(ResponseMessage.WRONG_PASSWORD);
-    }
 
     await prisma.student.update({
         where: {
@@ -670,11 +710,107 @@ const updateStudent = async (
         data: {
             studentCode: validPayload.studentCode,
             username: validPayload.username,
+            gender: validPayload.gender,
+            birthPlace: validPayload.birthPlace,
+            phoneNumber: validPayload.phoneNumber,
+            class: validPayload.class,
+        },
+    });
+};
+
+const updateStudentLockStatus = async (
+    validPayload: StudentLockStatusUpdate
+): Promise<void> => {
+    await prisma.student.update({
+        where: {
+            studentId: validPayload.studentId,
+        },
+        data: {
+            lockStatus: validPayload.status == LockStatus.LOCK,
+        },
+    });
+};
+
+const updateStudentPassword = async (
+    validPayload: StudentPwUpdate
+): Promise<void> => {
+    await prisma.student.update({
+        where: {
+            studentId: validPayload.studentId,
+        },
+        data: {
             password:
                 validPayload.password &&
                 hashSync(validPayload.password, saltOfRound),
         },
     });
+};
+
+const validateStudentRegisterRequest = async (
+    data: StudentSignup
+): Promise<OTPGenerationResult> => {
+    const duplicatedStudentAccount: Student | null =
+        await prisma.student.findFirst({
+            where: {
+                OR: [
+                    {
+                        studentCode: data.studentCode,
+                    },
+                    {
+                        email: data.email,
+                    },
+                ],
+            },
+        });
+
+    if (duplicatedStudentAccount != null) {
+        if (duplicatedStudentAccount.email == data.email) {
+            return OTPGenerationResult.EMAIL_IN_USED;
+        }
+        if (duplicatedStudentAccount.studentCode == data.studentCode) {
+            return OTPGenerationResult.STUDENT_CODE_EXISTED;
+        }
+    }
+
+    return OTPGenerationResult.PASS;
+};
+
+const validateStudentChangePwRequest = async (
+    email: string,
+    data: StudentPwUpdate
+): Promise<OTPGenerationResult> => {
+    const duplicatedStudentAccount: Student | null =
+        await prisma.student.findFirst({
+            where: {
+                studentId: data.studentId,
+                email: email,
+            },
+        });
+
+    if (duplicatedStudentAccount == null) {
+        return OTPGenerationResult.STUDENT_ID_NOT_EXIST;
+    } else {
+        const match = await checkUserPasswordMatch(
+            data.studentId,
+            data.lastPassword
+        );
+        if (!match) return OTPGenerationResult.PW_NOT_MATCH;
+    }
+
+    return OTPGenerationResult.PASS;
+};
+
+const checkStudentLockStatus = async (studentId: string): Promise<boolean> => {
+    const student = await prisma.student.findFirst({
+        where: {
+            studentId: studentId,
+        },
+        select: {
+            lockStatus: true,
+        },
+    });
+
+    return student != null && student.lockStatus == true;
 };
 
 export default {
@@ -694,6 +830,13 @@ export default {
     logoutAsStudent,
     deleteStudent,
     getStudentDTO,
-    updateStudent,
+    getStudentDTOByEmail,
     getStudentDTOByStudentCode,
+    updateStudent,
+    updateStudentPassword,
+    checkUserPasswordMatch,
+    checkStudentLockStatus,
+    updateStudentLockStatus,
+    validateStudentRegisterRequest,
+    validateStudentChangePwRequest,
 };

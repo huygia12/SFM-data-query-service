@@ -122,7 +122,91 @@ const sendEmail = async (
     }
 };
 
+const getOTPHTMLContent = (otp: string) => {
+    return `
+    <!doctype html>
+    <html lang="vi">
+        <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #f9e5a4;
+                    color: #333;
+                    margin: 0;
+                    padding: 0;
+                }
+
+                .container {
+                    width: 100%;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background-color: #ffffff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                }
+
+                .header {
+                    background-color: #ffd600; /* Màu vàng đậm */
+                    text-align: center;
+                    padding: 20px;
+                    border-radius: 8px;
+                }
+
+                .header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                    color: #ffffff;
+                }
+
+                .content {
+                    padding: 20px;
+                }
+
+                .content p {
+                    font-size: 16px;
+                    line-height: 1.5;
+                    margin: 10px 0;
+                }
+
+                .footer {
+                    text-align: center;
+                    font-size: 14px;
+                    color: #555;
+                    margin-top: 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>KMA Scanner thông báo</h1>
+                </div>
+
+                <div class="content">
+                    <p> Mã xác thực của bạn là: 
+                        <strong>${otp}</strong>, tránh để lộ ra ngoài. Mã có hiệu lực trong vòng 2 phút.
+                    </p>
+                    <p>
+                        Nếu bạn cần hỗ trợ hay có bất kỳ câu hỏi nào, đừng ngần ngại
+                        liên hệ với chúng tôi!
+                    </p>
+                    <p>Chúc bạn sử dụng trang web hiệu quả và tiện lợi!</p>
+                </div>
+
+                <div class="footer">
+                    <p>Thân ái, <br />Đội ngũ HG Store</p>
+                </div>
+            </div>
+        </body>
+    </html>
+  `;
+};
+
 export default {
     sendEmail,
     getSignUpGmailNotify: getAdminSignUpHTMLContent,
+    getOTPHTMLContent,
 };

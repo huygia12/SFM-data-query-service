@@ -1,9 +1,10 @@
 import JWT from "jsonwebtoken";
 import config from "@/common/app-config";
 import {AuthToken} from "@/common/constants";
-import {UserInToken} from "@/common/types";
+import {OTPTokenBody, UserInToken} from "@/common/types";
 import ms from "ms";
 
+export const OTP_TOKEN_LIFE_SPAN = "2 minutes";
 export const ACCESS_TOKEN_LIFE_SPAN = "1 days";
 export const REFRESH_TOKEN_LIFE_SPAN = "7 days";
 
@@ -41,15 +42,21 @@ const decodeToken = (token: string) => {
 };
 
 const generateAuthToken = (
-    userInfo: UserInToken,
+    userInfo: UserInToken | OTPTokenBody,
     tokenType: AuthToken
 ): string | null => {
     const token: string | null = generateToken(
         userInfo,
-        tokenType === AuthToken.AC ? config.AT_KEY : config.RT_KEY,
+        tokenType === AuthToken.AC
+            ? config.AT_KEY
+            : tokenType === AuthToken.RF
+              ? config.RT_KEY
+              : config.OTP_KEY,
         tokenType === AuthToken.AC
             ? ACCESS_TOKEN_LIFE_SPAN
-            : REFRESH_TOKEN_LIFE_SPAN
+            : tokenType === AuthToken.RF
+              ? REFRESH_TOKEN_LIFE_SPAN
+              : OTP_TOKEN_LIFE_SPAN
     );
 
     return token;
@@ -61,7 +68,11 @@ const verifyAuthToken = (
 ): string | JWT.JwtPayload => {
     const result = verifyToken(
         token,
-        tokenType === AuthToken.AC ? config.AT_KEY : config.RT_KEY
+        tokenType === AuthToken.AC
+            ? config.AT_KEY
+            : tokenType === AuthToken.RF
+              ? config.RT_KEY
+              : config.OTP_KEY
     );
     return result;
 };

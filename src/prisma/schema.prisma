@@ -55,7 +55,23 @@ model Student {
   createdAt     DateTime       @default(now()) @db.Timestamptz(6)
   deletedAt     DateTime?      @db.Timestamptz(6)
   studentCode   String         @unique(map: "studentcode_unique")
+  gender        Int
+  birthPlace    String?
+  phoneNumber   String?        @db.VarChar(15)
+  class         String?        @db.VarChar(15)
+  email         String         @unique(map: "uq_student_email") @db.VarChar(100)
+  lockStatus    Boolean        @default(false)
   personalForms PersonalForm[]
+}
+
+model OTP {
+  Id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  type             Int?
+  otpHash          String?
+  expireAt         DateTime? @db.Timestamptz(6)
+  validateAttempts Int       @default(0)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  email            String    @db.VarChar(100)
 }
 
 enum FieldType {

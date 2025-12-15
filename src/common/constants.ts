@@ -10,9 +10,12 @@ enum ResponseMessage {
     USER_ALREADY_LOGIN = "User already login",
     USER_NOT_FOUND = "User not found",
     WRONG_PASSWORD = "Wrong password",
+    RETYPE_PW_NOT_MATCH = "Retype password is not match",
+    INVALID_DATA = "Please enter right data format",
     GENERATE_TOKEN_ERROR = "Generate token error",
     ADMIN_CANNOT_BE_DELETED = "Admin can't be deleted",
     UNEXPECTED_ERROR = "Unexpected Error",
+    LOCKED = "Account is locked! please contact admin to unlock.",
 }
 
 enum RequestMethod {
@@ -26,6 +29,7 @@ enum RequestMethod {
 enum AuthToken {
     RF = "refreshToken",
     AC = "accessToken",
+    OTP = "otpToken",
 }
 
 enum ImageExtension {

@@ -1,11 +1,14 @@
 import express from "express";
 import formController from "@/controllers/form-controller";
+import userController from "@/controllers/user-controller";
 import {authMiddleware} from "@/middleware/auth-middleware";
 import {expressSchemaValidator} from "@/middleware/schema-validator";
 
 const router = express.Router();
-router.use(authMiddleware.isAuthorized);
+// common
+router.use(authMiddleware.isAuthorized, userController.checkStudentLockStatus);
 
+// each api
 router.get("/:id", formController.getForm);
 router.get("/statistic/count", formController.getNumberOfForms);
 router.post(

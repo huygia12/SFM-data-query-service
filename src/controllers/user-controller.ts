@@ -1,4 +1,4 @@
-import {Request, Response} from "express";
+import {NextFunction, Request, Response} from "express";
 import {StatusCodes} from "http-status-codes";
 import jwtService from "@/services/jwt-service";
 import userService from "@/services/user-service";
@@ -10,14 +10,18 @@ import {
     StudentSignup,
     StudentLogin,
     StudentUpdate,
+    StudentPwUpdate,
+    StudentLockStatusUpdate,
 } from "@/common/schemas";
-import {StudentDTO, UserInToken} from "@/common/types";
+import {LockStatus, StudentDTO, UserInToken, UserRole} from "@/common/types";
 import {AuthToken, ResponseMessage} from "@/common/constants";
 import MissingTokenError from "@/errors/auth/missing-token";
 import ms from "ms";
 import UserNotFoundError from "@/errors/user/user-not-found";
 import WrongPasswordError from "@/errors/user/wrong-password";
 import LastPasswordRequiredError from "@/errors/user/last-password-required";
+import RequestToLockedAccount from "@/errors/user/user-is-locked";
+import AccessDenided from "@/errors/auth/access-denied";
 
 /**
  * If updated email had already been existed in DB, return conflict status
@@ -283,6 +287,26 @@ const refreshStudentToken = async (req: Request, res: Response) => {
 };
 
 /**
+ * If
+ *
+ * @param {Request} req
+ * @param {Response} res
+ */
+const updateStudentPw = async (req: Request, res: Response) => {
+    const reqBody = req.body as StudentPwUpdate;
+
+    if (reqBody.password != reqBody.retypePassword) {
+        throw new WrongPasswordError(ResponseMessage.RETYPE_PW_NOT_MATCH);
+    }
+
+    await userService.updateStudentPassword(reqBody);
+
+    res.status(StatusCodes.OK).json({
+        message: ResponseMessage.SUCCESS,
+    });
+};
+
+/**
  * If updated studentCode had already been existed in DB, return conflict status
  *
  * @param {Request} req
@@ -291,20 +315,6 @@ const refreshStudentToken = async (req: Request, res: Response) => {
 const updateStudentInfo = async (req: Request, res: Response) => {
     const studentId = req.params.id as string;
     const reqBody = req.body as StudentUpdate;
-
-    if (reqBody.password !== undefined) {
-        if (
-            !reqBody.retypePassword ||
-            reqBody.password != reqBody.retypePassword
-        ) {
-            throw new WrongPasswordError("Retype password is not match");
-        }
-        if (!reqBody.lastPassword) {
-            throw new LastPasswordRequiredError(
-                "Previous password is required"
-            );
-        }
-    }
 
     await userService.updateStudent(studentId, reqBody);
 
@@ -358,6 +368,72 @@ const deleteStudent = async (req: Request, res: Response) => {
     });
 };
 
+const lockStudentAccount = async (req: Request, res: Response) => {
+    const bodyReq = req.body as StudentLockStatusUpdate;
+    const accessToken: string | string[] | undefined =
+        req.headers["authorization"];
+
+    if (typeof accessToken !== "string") {
+        console.debug(
+            `[user-controller]: checkStudentLockStatus: missing token`
+        );
+        throw new MissingTokenError(ResponseMessage.TOKEN_MISSING);
+    }
+
+    const user = jwtService.decodeToken(
+        accessToken.replace("Bearer ", "")
+    ) as UserInToken;
+
+    if (user.role == UserRole.STUDENT) {
+        if (
+            user.userId != bodyReq.studentId ||
+            bodyReq.status == LockStatus.UNLOCK
+        ) {
+            throw new AccessDenided(
+                "Cannot lock this studentId: need permission!"
+            );
+        }
+    }
+
+    await userService.updateStudentLockStatus(bodyReq);
+
+    res.status(StatusCodes.OK).json({
+        message: ResponseMessage.SUCCESS,
+    });
+};
+
+const checkStudentLockStatus = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    const accessToken: string | string[] | undefined =
+        req.headers["authorization"];
+
+    if (typeof accessToken == "string") {
+        const user = jwtService.decodeToken(
+            accessToken.replace("Bearer ", "")
+        ) as UserInToken;
+
+        if (user.role == UserRole.STUDENT) {
+            const isLock: boolean = await userService.checkStudentLockStatus(
+                user.userId
+            );
+
+            if (isLock) {
+                console.debug(
+                    `[user-controller]: checkStudentLockStatus: missing token`
+                );
+                throw new RequestToLockedAccount(ResponseMessage.LOCKED);
+            }
+        }
+
+        console.debug(`[user-controller]: checkStudentLockStatus: pass`);
+    }
+
+    next();
+};
+
 export default {
     //admins
     signupAsAdmin,
@@ -375,5 +451,8 @@ export default {
     logoutAsStudent,
     deleteStudent,
     getStudent,
+    updateStudentPw,
     updateStudentInfo,
+    checkStudentLockStatus,
+    lockStudentAccount,
 };

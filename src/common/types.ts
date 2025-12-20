@@ -25,7 +25,11 @@ export interface StudentDTO {
     studentId: string;
     studentCode: string;
     username: string;
+    gender: number;
+    birthPlace: string | null;
+    phoneNumber: string | null;
     email: string;
+    class: string | null;
     createdAt: Date;
     deletedAt: Date | null;
 }

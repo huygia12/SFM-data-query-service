@@ -1,8 +1,7 @@
-import "module-alias/register";
-//import moduleAlias from "module-alias";
-// moduleAlias.addAliases({
-//     "@": `${__dirname}`,
-// });
+import moduleAlias from "module-alias";
+moduleAlias.addAliases({
+    "@": `${__dirname}`,
+});
 import loaders from "./loaders";
 
 loaders();

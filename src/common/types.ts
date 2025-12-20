@@ -46,7 +46,7 @@ export interface UserInToken {
 }
 
 export enum LockStatus {
-    LOCK = 1,
+    LOCK = 0,
     UNLOCK = 1,
 }
 

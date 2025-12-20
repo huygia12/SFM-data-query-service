@@ -1,8 +1,7 @@
-FROM node:21-alpine@sha256:78c45726ea205bbe2f23889470f03b46ac988d14b6d813d095e2e9909f586f93 AS build
+FROM node:21-alpine@sha256:78c45726ea205bbe2f23889470f03b46ac988d14b6d813d095e2e9909f586f93 AS builder
 WORKDIR /app
-COPY package*.json .
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm install
+COPY package*.json ./
+RUN npm install
 COPY src/prisma src/prisma
 RUN npx prisma generate --schema ./src/prisma/schema.prisma
 COPY . .
@@ -12,11 +11,10 @@ FROM node:21-alpine@sha256:78c45726ea205bbe2f23889470f03b46ac988d14b6d813d095e2e
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
 WORKDIR /app
-COPY package*.json .
+COPY package*.json ./
 RUN npm pkg delete scripts.prepare
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --omit=dev
-COPY --from=build /app/dist ./dist
+RUN npm ci --omit=dev
+COPY --from=builder /app/dist ./dist
 COPY src/prisma prisma
 RUN npx prisma generate --schema ./prisma/schema.prisma
 

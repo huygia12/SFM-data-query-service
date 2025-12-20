@@ -133,3 +133,9 @@ dist
 ocr-schema/debug/
 ocr-schema/ocr-output/
 ocr-schema/temp/
+
+# SSL
+ssl/*.pem
+
+# env
+.env

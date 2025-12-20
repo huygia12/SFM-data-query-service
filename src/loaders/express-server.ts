@@ -1,5 +1,5 @@
 import express from "express";
-import {createServer, Server} from "node:http";
+import {Server} from "node:http";
 import cors from "cors";
 import {options} from "@/common/cors-config";
 import errorHandler from "@/errors/error-handler";
@@ -10,15 +10,20 @@ import morgan from "morgan";
 import helmet from "helmet";
 import compression from "compression";
 
+type ServerFactory = (app: express.Application) => Server;
+
 class ExpressServer {
     private _app: express.Application;
     private _server: Server;
 
-    public constructor(port: number) {
-        this.listen(port);
+    public constructor(
+        private readonly port: number,
+        private readonly serverFactory: ServerFactory
+    ) {
+        this.listen();
     }
 
-    private listen(port: number): void {
+    private listen(): void {
         this._app = express();
         this._app.use(morgan("dev"));
         this._app.use(helmet());
@@ -29,10 +34,11 @@ class ExpressServer {
         this._app.use("/", API_v1);
         this._app.use("*", errorHandler);
 
-        this._server = createServer(this._app);
-        this._server.listen(port, () => {
+        this._server = this.serverFactory(this._app);
+
+        this._server.listen(this.port, () => {
             console.info(
-                `[express server]: Express server is running at port ${port}`
+                `[express server]: Express server is running at port ${this.port}`
             );
         });
     }
@@ -43,10 +49,6 @@ class ExpressServer {
 
             console.info("[express server]: Stopped");
         });
-    }
-
-    public instance() {
-        return this._server;
     }
 
     public getApp() {

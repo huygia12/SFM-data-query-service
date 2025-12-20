@@ -79,7 +79,7 @@ const studentUpdateSchema = z
     .object({
         studentCode: blankCheck().optional(),
         username: blankCheck().optional(),
-        gender: z.number().min(0).max(0).optional(),
+        gender: z.number().min(0).max(1).optional(),
         birthPlace: blankCheck().optional(),
         phoneNumber: blankCheck().optional(),
         class: blankCheck().optional(),

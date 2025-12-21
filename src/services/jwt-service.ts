@@ -5,7 +5,7 @@ import {OTPTokenBody, UserInToken} from "@/common/types";
 import ms from "ms";
 
 export const OTP_TOKEN_LIFE_SPAN = "2 minutes";
-export const ACCESS_TOKEN_LIFE_SPAN = "1 days";
+export const ACCESS_TOKEN_LIFE_SPAN = "15 seconds";
 export const REFRESH_TOKEN_LIFE_SPAN = "7 days";
 
 const generateToken = (
@@ -19,7 +19,7 @@ const generateToken = (
         }
         return JWT.sign(payload, secretSignature, {
             algorithm: "HS256",
-            expiresIn: ms(tokenLife),
+            expiresIn: tokenLife,
         });
     } catch {
         return null;
@@ -58,6 +58,7 @@ const generateAuthToken = (
               ? REFRESH_TOKEN_LIFE_SPAN
               : OTP_TOKEN_LIFE_SPAN
     );
+    console.log("Generated token:", token);
 
     return token;
 };

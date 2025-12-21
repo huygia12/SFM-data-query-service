@@ -18,7 +18,7 @@ router.post(
     userController.loginAsStudent
 );
 router.get("/logout", userController.logoutAsStudent);
-router.get(
+router.post(
     "/refresh",
     userController.checkStudentLockStatus,
     userController.refreshStudentToken

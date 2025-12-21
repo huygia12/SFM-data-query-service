@@ -16,7 +16,7 @@ router.post(
     userController.loginAsAdmin
 );
 router.get("/logout", userController.logoutAsAdmin);
-router.get("/refresh", userController.refreshAdminToken);
+router.post("/refresh", userController.refreshAdminToken);
 router.delete(
     "/:id",
     authMiddleware.isAuthorized,

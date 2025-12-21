@@ -77,6 +77,7 @@ const loginAsAdmin = async (req: Request, res: Response) => {
         message: ResponseMessage.SUCCESS,
         info: {
             accessToken: accessToken,
+            refreshToken: refreshToken,
         },
     });
 };
@@ -89,27 +90,26 @@ const loginAsAdmin = async (req: Request, res: Response) => {
  * @param {Response} res
  */
 const refreshAdminToken = async (req: Request, res: Response) => {
-    const rtFromCookie = req.cookies.refreshToken as string;
+    // [UPDATED] Lấy refresh token từ Body
+    const {refreshToken: rtFromBody} = req.body;
 
-    if (!rtFromCookie) {
+    if (!rtFromBody) {
         console.debug(
-            `[user controller]: refresh token: Refresh token not found`
+            `[user controller]: refresh token: Refresh token not found in body`
         );
         throw new MissingTokenError(ResponseMessage.TOKEN_MISSING);
     }
 
-    const tokens = await userService.refreshAdminToken(rtFromCookie);
-    //set two token to cookie
-    res.cookie(AuthToken.RF, tokens.refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: ms(jwtService.REFRESH_TOKEN_LIFE_SPAN),
-    });
+    const tokens = await userService.refreshAdminToken(rtFromBody);
+
+    // [DELETED] Không set cookie nữa
+    // res.cookie(AuthToken.RF, tokens.refreshToken, { ... });
+
     return res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
         info: {
             accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken, // [ADDED] Trả về RT mới để client cập nhật
         },
     });
 };
@@ -232,6 +232,7 @@ const loginAsStudent = async (req: Request, res: Response) => {
         message: ResponseMessage.SUCCESS,
         info: {
             accessToken: accessToken,
+            refreshToken: refreshToken,
         },
     });
 };
@@ -263,26 +264,50 @@ const logoutAsStudent = async (req: Request, res: Response) => {
  * @param {Request} req
  * @param {Response} res
  */
-const refreshStudentToken = async (req: Request, res: Response) => {
-    const rtFromCookie = req.cookies.refreshToken as string;
+// const refreshStudentToken = async (req: Request, res: Response) => {
+//     const rtFromCookie = req.cookies.refreshToken as string;
 
-    if (!rtFromCookie) {
+//     if (!rtFromCookie) {
+//         throw new MissingTokenError(ResponseMessage.TOKEN_MISSING);
+//     }
+
+//     const {refreshToken, accessToken} =
+//         await userService.refreshStudentToken(rtFromCookie);
+//     //set two token to cookie
+//     res.cookie(AuthToken.RF, refreshToken, {
+//         httpOnly: true,
+//         secure: true,
+//         sameSite: "none",
+//         maxAge: ms(jwtService.REFRESH_TOKEN_LIFE_SPAN),
+//     });
+//     return res.status(StatusCodes.OK).json({
+//         message: ResponseMessage.SUCCESS,
+//         info: {
+//             accessToken: accessToken,
+//         },
+//     });
+// };
+const refreshStudentToken = async (req: Request, res: Response) => {
+    // 1. Lấy refresh token từ body thay vì cookie
+    const {refreshToken: rtFromBody} = req.body;
+    console.log("Received refresh token from body:", rtFromBody);
+    // Kiểm tra nếu không có token
+    if (!rtFromBody) {
         throw new MissingTokenError(ResponseMessage.TOKEN_MISSING);
     }
 
+    // Gọi service để refresh (logic giữ nguyên)
     const {refreshToken, accessToken} =
-        await userService.refreshStudentToken(rtFromCookie);
-    //set two token to cookie
-    res.cookie(AuthToken.RF, refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: ms(jwtService.REFRESH_TOKEN_LIFE_SPAN),
-    });
+        await userService.refreshStudentToken(rtFromBody);
+
+    // 2. Không cần set cookie nữa (hoặc giữ lại nếu bạn vẫn support web song song)
+    // Mobile App sẽ lấy token từ JSON body để lưu vào SecureStore/Keychain
+
     return res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
         info: {
             accessToken: accessToken,
+            refreshToken: refreshToken, // Trả về Refresh Token mới để App cập nhật lại
         },
     });
 };

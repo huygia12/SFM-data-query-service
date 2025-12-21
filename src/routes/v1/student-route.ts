@@ -64,5 +64,10 @@ router.post(
     userController.checkStudentLockStatus,
     userController.lockStudentAccount
 );
+router.post(
+    "/checkLockStatus",
+    authMiddleware.isAuthorized,
+    userController.getStudentLockStatus
+);
 
 export default router;

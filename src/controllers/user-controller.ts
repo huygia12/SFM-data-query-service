@@ -12,6 +12,7 @@ import {
     StudentUpdate,
     StudentPwUpdate,
     StudentLockStatusUpdate,
+    StudentLockChecking,
 } from "@/common/schemas";
 import {LockStatus, StudentDTO, UserInToken, UserRole} from "@/common/types";
 import {AuthToken, ResponseMessage} from "@/common/constants";
@@ -434,6 +435,19 @@ const checkStudentLockStatus = async (
     next();
 };
 
+const getStudentLockStatus = async (req: Request, res: Response) => {
+    const reqBody = req.body as StudentLockChecking;
+
+    const isLock: boolean = await userService.checkStudentLockStatus(
+        reqBody.studentId
+    );
+
+    res.status(StatusCodes.OK).json({
+        message: ResponseMessage.SUCCESS,
+        status: isLock ? LockStatus.LOCK : LockStatus.UNLOCK,
+    });
+};
+
 export default {
     //admins
     signupAsAdmin,
@@ -455,4 +469,5 @@ export default {
     updateStudentInfo,
     checkStudentLockStatus,
     lockStudentAccount,
+    getStudentLockStatus,
 };

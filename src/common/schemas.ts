@@ -184,9 +184,15 @@ const updateStudentLockStatusSchema = z.object({
     status: z.nativeEnum(LockStatus),
 });
 
+const checkStudentLockSchema = z.object({
+    studentId: blankCheck(),
+});
+
 export type StudentLockStatusUpdate = z.infer<
     typeof updateStudentLockStatusSchema
 >;
+
+export type StudentLockChecking = z.infer<typeof checkStudentLockSchema>;
 
 export type OTPCheking = z.infer<typeof otpCheckingSchema>;
 
@@ -233,6 +239,9 @@ export default {
     },
     ["/students/updateLockStatus"]: {
         [RequestMethod.POST]: updateStudentLockStatusSchema,
+    },
+    ["/students/checkLockStatus"]: {
+        [RequestMethod.POST]: checkStudentLockSchema,
     },
     ["/students/:id"]: {
         [RequestMethod.PUT]: studentUpdateSchema,

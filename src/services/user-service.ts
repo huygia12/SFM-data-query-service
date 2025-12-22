@@ -538,15 +538,8 @@ const insertStudents = async (validPayload: StudentSignup): Promise<void> => {
     });
 };
 
-const getStudentDTOs = async (
-    limit: number = 10,
-    deletedInclude: boolean = false,
-    currentPage: number = 1
-): Promise<StudentDTO[]> => {
+const getStudentDTOs = async (): Promise<StudentDTO[]> => {
     const students = await prisma.student.findMany({
-        where: {
-            deletedAt: deletedInclude ? undefined : null,
-        },
         select: {
             studentId: true,
             studentCode: true,
@@ -559,8 +552,6 @@ const getStudentDTOs = async (
             createdAt: true,
             deletedAt: true,
         },
-        skip: (currentPage - 1) * limit,
-        take: limit,
     });
 
     return students;

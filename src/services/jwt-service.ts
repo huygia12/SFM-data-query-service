@@ -2,10 +2,9 @@ import JWT from "jsonwebtoken";
 import config from "@/common/app-config";
 import {AuthToken} from "@/common/constants";
 import {OTPTokenBody, UserInToken} from "@/common/types";
-import ms from "ms";
 
 export const OTP_TOKEN_LIFE_SPAN = "2 minutes";
-export const ACCESS_TOKEN_LIFE_SPAN = "15 seconds";
+export const ACCESS_TOKEN_LIFE_SPAN = "5 minutes";
 export const REFRESH_TOKEN_LIFE_SPAN = "7 days";
 
 const generateToken = (

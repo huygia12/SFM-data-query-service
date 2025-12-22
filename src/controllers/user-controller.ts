@@ -264,50 +264,21 @@ const logoutAsStudent = async (req: Request, res: Response) => {
  * @param {Request} req
  * @param {Response} res
  */
-// const refreshStudentToken = async (req: Request, res: Response) => {
-//     const rtFromCookie = req.cookies.refreshToken as string;
-
-//     if (!rtFromCookie) {
-//         throw new MissingTokenError(ResponseMessage.TOKEN_MISSING);
-//     }
-
-//     const {refreshToken, accessToken} =
-//         await userService.refreshStudentToken(rtFromCookie);
-//     //set two token to cookie
-//     res.cookie(AuthToken.RF, refreshToken, {
-//         httpOnly: true,
-//         secure: true,
-//         sameSite: "none",
-//         maxAge: ms(jwtService.REFRESH_TOKEN_LIFE_SPAN),
-//     });
-//     return res.status(StatusCodes.OK).json({
-//         message: ResponseMessage.SUCCESS,
-//         info: {
-//             accessToken: accessToken,
-//         },
-//     });
-// };
 const refreshStudentToken = async (req: Request, res: Response) => {
-    // 1. Lấy refresh token từ body thay vì cookie
     const {refreshToken: rtFromBody} = req.body;
-    console.log("Received refresh token from body:", rtFromBody);
-    // Kiểm tra nếu không có token
+
     if (!rtFromBody) {
         throw new MissingTokenError(ResponseMessage.TOKEN_MISSING);
     }
 
-    // Gọi service để refresh (logic giữ nguyên)
     const {refreshToken, accessToken} =
         await userService.refreshStudentToken(rtFromBody);
-
-    // 2. Không cần set cookie nữa (hoặc giữ lại nếu bạn vẫn support web song song)
-    // Mobile App sẽ lấy token từ JSON body để lưu vào SecureStore/Keychain
 
     return res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
         info: {
             accessToken: accessToken,
-            refreshToken: refreshToken, // Trả về Refresh Token mới để App cập nhật lại
+            refreshToken: refreshToken,
         },
     });
 };
@@ -366,17 +337,7 @@ const getStudent = async (req: Request, res: Response) => {
 };
 
 const getStudents = async (req: Request, res: Response) => {
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const deletedInclude = Boolean(req.query.deletedInclude);
-    const currentPage = req.query.currentPage
-        ? Number(req.query.currentPage)
-        : undefined;
-
-    const students = await userService.getStudentDTOs(
-        limit,
-        deletedInclude,
-        currentPage
-    );
+    const students = await userService.getStudentDTOs();
 
     res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,

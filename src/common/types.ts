@@ -1,4 +1,4 @@
-import {Category, Field, PersonalForm} from "@prisma/client";
+import {Category, PersonalForm} from "@prisma/client";
 
 export enum UserRole {
     ADMIN = "ADMIN",
@@ -71,7 +71,16 @@ export interface Entry {
 }
 
 export type FormFullJoin = PersonalForm & {
-    fields: Field[];
+    fields: Entry[];
+    category: Category;
+    student: {
+        studentId: string;
+        studentCode: string;
+        username: string;
+    };
+};
+
+export type FormFullJoinBeforeEncrypt = PersonalForm & {
     category: Category;
     student: {
         studentId: string;

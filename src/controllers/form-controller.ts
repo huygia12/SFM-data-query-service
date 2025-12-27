@@ -24,7 +24,18 @@ const createForm = async (req: Request, res: Response) => {
 
     const entries = transformToEntries(reqBody);
 
-    const formId = await formService.insertForm(entries, studentId, categoryId);
+    const pk = await userService.getStudentPK(studentId);
+
+    if (!pk) {
+        throw new Error("Cannot get PK");
+    }
+
+    const formId = await formService.insertForm(
+        JSON.stringify(entries),
+        studentId,
+        categoryId,
+        pk
+    );
 
     return res.status(StatusCodes.CREATED).json({
         message: ResponseMessage.SUCCESS,
@@ -38,9 +49,20 @@ const updateForm = async (req: Request, res: Response) => {
     const formId = req.params.id as string;
     const reqBody = req.body;
 
-    const entries = transformToEntries(reqBody);
+    const form = await formService.getFormFullJoin(formId);
+    if (!form) {
+        throw new FormNotFoundError(
+            "Form with id " + formId + " cannot be found"
+        );
+    }
 
-    await formService.updateForm(formId, entries);
+    const pk = await userService.getStudentPK(form.studentId);
+    if (!pk) {
+        throw new Error("Cannot get PK");
+    }
+
+    const entries = transformToEntries(reqBody);
+    await formService.updateForm(formId, JSON.stringify(entries), pk);
 
     return res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
@@ -70,12 +92,18 @@ const uploadForm = async (req: Request, res: Response) => {
             "Student with code " + studentCode + " cannot be found"
         );
 
+    const pk = await userService.getStudentPK(student.studentId);
+    if (!pk) {
+        throw new Error("Cannot get PK");
+    }
+
     const entries = transformToEntries(fields);
 
     const formId = await formService.insertForm(
-        entries,
+        JSON.stringify(entries),
         student.studentId,
         categoryId,
+        pk,
         status,
         adminId
     );
@@ -97,10 +125,14 @@ const getForm = async (req: Request, res: Response) => {
         throw new FormNotFoundError(
             "Form with id " + formId + " cannot be found"
         );
+    const pk = await userService.getStudentPK(form.studentId);
 
+    if (!pk) {
+        throw new Error("Cannot get PK");
+    }
     return res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
-        info: form,
+        info: formService.convertToFormFullJoin(form, pk),
     });
 };
 
@@ -132,9 +164,18 @@ const getForms = async (req: Request, res: Response) => {
         studentId: studentId,
     });
 
+    const pkObjects = await userService.getStudentsPK(
+        forms.map((form) => form.studentId)
+    );
+
     return res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
-        info: forms,
+        info: forms.map((form) => {
+            const pk = pkObjects.find(
+                (object) => object.studentId == form.studentId
+            );
+            return formService.convertToFormFullJoin(form, pk?.privateKey!);
+        }),
     });
 };
 
@@ -222,10 +263,10 @@ export default {
     createForm,
     getForms,
     getForm,
-    updateFormStatus,
     uploadForm,
     updateForm,
     deleteForm,
+    updateFormStatus,
     getEachCategoryNumberOfForms,
     getNumberOfForms,
 };

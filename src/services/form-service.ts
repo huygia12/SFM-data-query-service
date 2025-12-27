@@ -1,53 +1,48 @@
-import {Entry, FormFullJoin} from "@/common/types";
+import aesHelper from "@/common/aes-util";
+import {FormFullJoinBeforeEncrypt} from "@/common/types";
 import prisma from "@/common/prisma-client";
 import {FormStatus, PersonalForm} from "@prisma/client";
 import FormNotFoundError from "@/errors/form/form-not-found";
 import FormActionDenied from "@/errors/form/form-action-denied";
 
 const insertForm = async (
-    fields: Entry[],
+    fields: string,
     studentId: string,
     categoryId: string,
+    pk: string,
     status: FormStatus = FormStatus.STAGING,
     adminId?: string
 ): Promise<string | undefined> => {
-    let formId;
-    await prisma.$transaction(async (prisma) => {
-        const form = await prisma.personalForm.create({
-            data: {
-                studentId: studentId,
-                categoryId: categoryId,
-                status: status,
-                updatedBy: adminId,
-            },
-            select: {
-                personalFormId: true,
-            },
-        });
+    const {ciphertext, iv} = aesHelper.encrypt(fields, pk);
 
-        formId = form.personalFormId;
-
-        await prisma.field.createMany({
-            data: fields.map((entry) => ({
-                personalFormId: form.personalFormId,
-                name: entry.name,
-                value: entry.value,
-            })),
-        });
+    let {personalFormId} = await prisma.personalForm.create({
+        data: {
+            studentId: studentId,
+            categoryId: categoryId,
+            status: status,
+            data: `${ciphertext}.${iv}`,
+            updatedBy: adminId,
+        },
+        select: {
+            personalFormId: true,
+        },
     });
 
-    return formId;
+    return personalFormId;
+};
+
+const parseEntries = (text: string) => {
+    return JSON.parse(text) as Array<{name: string; value: string}>;
 };
 
 const getFormFullJoin = async (
     formId: string
-): Promise<FormFullJoin | null> => {
+): Promise<FormFullJoinBeforeEncrypt | null> => {
     const form = await prisma.personalForm.findFirst({
         where: {
             personalFormId: formId,
         },
         include: {
-            fields: true,
             student: {
                 select: {
                     studentId: true,
@@ -58,7 +53,20 @@ const getFormFullJoin = async (
             category: true,
         },
     });
+
     return form;
+};
+
+const convertToFormFullJoin = (
+    form: FormFullJoinBeforeEncrypt,
+    aesKey: string
+) => {
+    const [data, iv] = form.data.split(".");
+
+    return {
+        ...form,
+        fields: parseEntries(aesHelper.decrypt(data, aesKey, iv)),
+    };
 };
 
 const getFormFullJoins = async (params: {
@@ -70,10 +78,7 @@ const getFormFullJoins = async (params: {
     status?: FormStatus[];
     limit: number;
     currentPage: number;
-}): Promise<FormFullJoin[]> => {
-    console.debug(
-        "check categories length " + (params.categoryIds === undefined)
-    );
+}): Promise<FormFullJoinBeforeEncrypt[]> => {
     const startOfDate =
         params.fromDate && new Date(params.fromDate.setHours(0, 0, 0, 0));
     const endOfDate =
@@ -100,7 +105,6 @@ const getFormFullJoins = async (params: {
             },
         },
         include: {
-            fields: true,
             student: {
                 select: {
                     studentId: true,
@@ -147,7 +151,11 @@ const getForm = async (formId: string): Promise<PersonalForm | null> => {
     return form;
 };
 
-const updateForm = async (formId: string, fields: Entry[]): Promise<void> => {
+const updateForm = async (
+    formId: string,
+    fields: string,
+    pk: string
+): Promise<void> => {
     const form = await getForm(formId);
     if (!form) {
         throw new FormNotFoundError(
@@ -159,20 +167,15 @@ const updateForm = async (formId: string, fields: Entry[]): Promise<void> => {
         throw new FormActionDenied("unable to update this form");
     }
 
-    await prisma.$transaction(async (prisma) => {
-        await prisma.field.deleteMany({
-            where: {
-                personalFormId: formId,
-            },
-        });
+    const {ciphertext, iv} = aesHelper.encrypt(fields, pk);
 
-        await prisma.field.createMany({
-            data: fields.map((entry) => ({
-                personalFormId: formId,
-                name: entry.name,
-                value: entry.value,
-            })),
-        });
+    await prisma.personalForm.update({
+        where: {
+            personalFormId: formId,
+        },
+        data: {
+            data: `${ciphertext}.${iv}`,
+        },
     });
 };
 
@@ -188,18 +191,10 @@ const deleteForm = async (formId: string) => {
         throw new FormActionDenied("unable to delete this form");
     }
 
-    await prisma.$transaction(async (prisma) => {
-        await prisma.field.deleteMany({
-            where: {
-                personalFormId: formId,
-            },
-        });
-
-        await prisma.personalForm.delete({
-            where: {
-                personalFormId: formId,
-            },
-        });
+    await prisma.personalForm.delete({
+        where: {
+            personalFormId: formId,
+        },
     });
 };
 
@@ -252,4 +247,5 @@ export default {
     deleteForm,
     getFormNumberOfEachCategories,
     getNumberOfForms,
+    convertToFormFullJoin,
 };

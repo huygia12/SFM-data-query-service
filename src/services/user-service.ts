@@ -516,6 +516,19 @@ const getStudentPK = async (studentId: string): Promise<string | null> => {
     return decryptField(student.private_key, config.MASTER_KEY);
 };
 
+const getStudentsPK = async (
+    studentIds: string[]
+): Promise<{studentId: string; privateKey: string}[]> => {
+    const students = await getStudentsById(studentIds);
+
+    return students.map((student) => {
+        return {
+            studentId: student.studentId,
+            privateKey: decryptField(student.private_key, config.MASTER_KEY)!,
+        };
+    });
+};
+
 const decryptStudent = (plainPK: string, student: StudentDTO): StudentDTO => {
     return {
         studentId: student.studentId,
@@ -642,6 +655,18 @@ const getStudentById = async (studentId: string): Promise<Student | null> => {
     });
 
     return user;
+};
+
+const getStudentsById = async (studentIds: string[]): Promise<Student[]> => {
+    const users = await prisma.student.findMany({
+        where: {
+            studentId: {
+                in: studentIds,
+            },
+        },
+    });
+
+    return users;
 };
 
 const getStudentDTOByStudentCode = async (
@@ -910,6 +935,7 @@ export default {
     updateStudentPassword,
     getStudentDTOs,
     getStudentPK,
+    getStudentsPK,
     decryptStudent,
     loginAsStudent,
     refreshStudentToken,

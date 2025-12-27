@@ -24,14 +24,6 @@ model Category {
   PersonalForm PersonalForm[]
 }
 
-model Field {
-  fieldId        String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name           String       @db.VarChar(255)
-  value          String
-  personalFormId String       @db.Uuid
-  personalForm   PersonalForm @relation(fields: [personalFormId], references: [personalFormId], onDelete: NoAction, onUpdate: NoAction)
-}
-
 model PersonalForm {
   personalFormId String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   signature      String?
@@ -41,7 +33,7 @@ model PersonalForm {
   createdAt      DateTime   @default(now()) @db.Timestamptz(6)
   deletedAt      DateTime?  @db.Timestamptz(6)
   status         FormStatus @default(STAGING)
-  fields         Field[]
+  data           String
   Admin          Admin?     @relation(fields: [updatedBy], references: [adminId], onDelete: NoAction, onUpdate: NoAction, map: "PersonalForm_approvedBy_fkey")
   category       Category   @relation(fields: [categoryId], references: [categoryId], onDelete: NoAction, onUpdate: NoAction)
   student        Student    @relation(fields: [studentId], references: [studentId], onDelete: NoAction, onUpdate: NoAction)
@@ -61,7 +53,7 @@ model Student {
   class            String?
   email            String         @unique(map: "uq_student_email")
   lockStatus       Boolean        @default(false)
-  private_key      String?
+  private_key      String
   hash_email       String?
   hash_studentCode String?
   loginAttemps     Int            @default(0)

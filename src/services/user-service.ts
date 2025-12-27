@@ -31,6 +31,7 @@ import config from "@/common/app-config";
 import {sha256} from "@/common/sha256-util";
 
 const saltOfRound = 10;
+const DEFAULT_LOGIN_ATTEMPS = 5;
 
 //admins
 const updateAdmin = async (
@@ -584,7 +585,7 @@ const insertStudent = async (validPayload: StudentSignup): Promise<void> => {
     const encryptedEmail = aesHelper.encrypt(validPayload.email, privateKey);
     const encryptedPK = aesHelper.encrypt(privateKey, config.MASTER_KEY);
 
-    await prisma.student.createMany({
+    await prisma.student.create({
         data: {
             studentCode: `${encryptedStudentCode.ciphertext}.${encryptedStudentCode.iv}`,
             hash_studentCode: sha256(validPayload.studentCode),
@@ -594,6 +595,7 @@ const insertStudent = async (validPayload: StudentSignup): Promise<void> => {
             hash_email: sha256(validPayload.email),
             private_key: `${encryptedPK.ciphertext}.${encryptedPK.iv}`,
             password: hashSync(validPayload.password, saltOfRound),
+            loginAttemps: DEFAULT_LOGIN_ATTEMPS,
         },
     });
 };
@@ -705,10 +707,41 @@ const getValidStudent = async (
     if (findByStudentCode.lockStatus == true)
         throw new RequestToLockedAccount(ResponseMessage.LOCKED);
 
+    if (findByStudentCode.loginAttemps == 0) {
+        await prisma.student.update({
+            where: {
+                studentId: findByStudentCode.studentId,
+            },
+            data: {
+                lockStatus: true,
+            },
+        });
+        throw new RequestToLockedAccount(ResponseMessage.LOCKED);
+    }
     // Check whether password is valid
     const match = compareSync(password, findByStudentCode.password);
-    if (!match) throw new WrongPasswordError(ResponseMessage.WRONG_PASSWORD);
+    if (!match) {
+        await prisma.student.update({
+            where: {
+                studentId: findByStudentCode.studentId,
+            },
+            data: {
+                loginAttemps: {
+                    decrement: 1,
+                },
+            },
+        });
+        throw new WrongPasswordError(ResponseMessage.WRONG_PASSWORD);
+    }
 
+    prisma.student.update({
+        where: {
+            studentId: findByStudentCode.studentId,
+        },
+        data: {
+            loginAttemps: DEFAULT_LOGIN_ATTEMPS,
+        },
+    });
     return findByStudentCode;
 };
 
@@ -821,6 +854,7 @@ const updateStudentLockStatus = async (
         },
         data: {
             lockStatus: validPayload.status == LockStatus.LOCK,
+            loginAttemps: DEFAULT_LOGIN_ATTEMPS,
         },
     });
 };

@@ -48,20 +48,24 @@ model PersonalForm {
 }
 
 model Student {
-  studentId     String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  password      String
-  username      String         @db.VarChar(255)
-  refreshTokens String[]       @default([])
-  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
-  deletedAt     DateTime?      @db.Timestamptz(6)
-  studentCode   String         @unique(map: "studentcode_unique")
-  gender        Int
-  birthPlace    String?
-  phoneNumber   String?        @db.VarChar(15)
-  class         String?        @db.VarChar(15)
-  email         String         @unique(map: "uq_student_email") @db.VarChar(100)
-  lockStatus    Boolean        @default(false)
-  personalForms PersonalForm[]
+  studentId        String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  password         String
+  username         String         @db.VarChar(255)
+  refreshTokens    String[]       @default([])
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  deletedAt        DateTime?      @db.Timestamptz(6)
+  studentCode      String         @unique(map: "studentcode_unique")
+  gender           Int
+  birthPlace       String?
+  phoneNumber      String?
+  class            String?
+  email            String         @unique(map: "uq_student_email")
+  lockStatus       Boolean        @default(false)
+  private_key      String?
+  hash_email       String?
+  hash_studentCode String?
+  loginAttemps     Int            @default(0)
+  personalForms    PersonalForm[]
 }
 
 model OTP {

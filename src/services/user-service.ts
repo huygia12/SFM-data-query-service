@@ -26,6 +26,9 @@ import jwtService from "./jwt-service";
 import InvalidTokenError from "@/errors/auth/invalid-token";
 import {Admin, Student} from "@prisma/client";
 import RequestToLockedAccount from "@/errors/user/user-is-locked";
+import aesHelper from "@/common/aes-util";
+import config from "@/common/app-config";
+import {sha256} from "@/common/sha256-util";
 
 const saltOfRound = 10;
 
@@ -341,22 +344,21 @@ const checkUserPasswordMatch = async (
     studentId: string,
     password: string
 ): Promise<boolean> => {
-    const adminAccount = await getStudentById(studentId);
+    const account = await getStudentById(studentId);
 
-    if (!adminAccount)
-        throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
+    if (!account) throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
 
     // Check whether password is valid
-    return compareSync(password, adminAccount.password);
+    return compareSync(password, account.password);
 };
 
 const checkIfStudentRefreshTokenExistInDB = async (
     refreshToken: string,
-    adminId: string
+    studentId: string
 ): Promise<boolean> => {
     const counter = await prisma.student.count({
         where: {
-            studentId: adminId,
+            studentId: studentId,
             deletedAt: null,
             refreshTokens: {has: refreshToken},
         },
@@ -372,6 +374,18 @@ const clearStudentRefreshTokens = async (studentId: string) => {
             refreshTokens: [],
         },
     });
+};
+
+const createStudentTokenPayload = (student: Student) => {
+    const plainPK = decryptField(student.private_key, config.MASTER_KEY);
+    const payload: UserInToken = {
+        userId: student.studentId,
+        username: student.username,
+        role: UserRole.STUDENT,
+        email: decryptField(student.email, plainPK!),
+    };
+
+    return payload;
 };
 
 const refreshStudentToken = async (
@@ -398,18 +412,13 @@ const refreshStudentToken = async (
         }
 
         //Down here token must be valid
-        const userDTO = await getStudentDTO(userDecoded.userId);
+        const student = await getStudentById(userDecoded.userId);
 
-        if (!userDTO)
+        if (!student)
             throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
 
         await deleteStudentRefreshToken(prevRT, userDecoded.userId);
-        const payload: UserInToken = {
-            userId: userDTO.studentId,
-            username: userDTO.username,
-            role: UserRole.STUDENT,
-            email: userDTO.email,
-        };
+        const payload: UserInToken = createStudentTokenPayload(student);
 
         //create AT, RT
         const accessToken: string | null = jwtService.generateAuthToken(
@@ -426,7 +435,7 @@ const refreshStudentToken = async (
             throw new Error(ResponseMessage.GENERATE_TOKEN_ERROR);
 
         //Push refresh token to DB
-        await pushStudentRefreshToken(refreshToken, userDTO.studentId);
+        await pushStudentRefreshToken(refreshToken, student.studentId);
         return {accessToken, refreshToken};
     } catch {
         throw new InvalidTokenError(ResponseMessage.TOKEN_INVALID);
@@ -498,12 +507,36 @@ const getStudentDTO = async (studentId: string): Promise<StudentDTO | null> => {
     return student;
 };
 
+const getStudentPK = async (studentId: string): Promise<string | null> => {
+    const student = await getStudentById(studentId);
+    if (!student) {
+        throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
+    }
+
+    return decryptField(student.private_key, config.MASTER_KEY);
+};
+
+const decryptStudent = (plainPK: string, student: StudentDTO): StudentDTO => {
+    return {
+        studentId: student.studentId,
+        studentCode: decryptField(student.studentCode, plainPK) as string,
+        username: student.username,
+        gender: student.gender,
+        birthPlace: decryptField(student.birthPlace, plainPK),
+        phoneNumber: decryptField(student.phoneNumber, plainPK),
+        email: decryptField(student.email, plainPK) as string,
+        class: decryptField(student.class, plainPK),
+        createdAt: student.createdAt,
+        deletedAt: student.deletedAt,
+    };
+};
+
 const getStudentDTOByEmail = async (
     email: string
 ): Promise<StudentDTO | null> => {
-    const student = await prisma.student.findUnique({
+    const student = await prisma.student.findFirst({
         where: {
-            email: email,
+            hash_email: sha256(email),
         },
         select: {
             studentId: true,
@@ -522,7 +555,7 @@ const getStudentDTOByEmail = async (
     return student;
 };
 
-const insertStudents = async (validPayload: StudentSignup): Promise<void> => {
+const insertStudent = async (validPayload: StudentSignup): Promise<void> => {
     const duplicatedStudentCode = await getStudentByStudentCode(
         validPayload.studentCode
     );
@@ -530,9 +563,23 @@ const insertStudents = async (validPayload: StudentSignup): Promise<void> => {
     if (duplicatedStudentCode)
         throw new UserAlreadyExistError(ResponseMessage.USER_ALREADY_EXISTS);
 
+    const privateKey = aesHelper.getNewPrivateKey();
+    const encryptedStudentCode = aesHelper.encrypt(
+        validPayload.studentCode,
+        privateKey
+    );
+    const encryptedEmail = aesHelper.encrypt(validPayload.email, privateKey);
+    const encryptedPK = aesHelper.encrypt(privateKey, config.MASTER_KEY);
+
     await prisma.student.createMany({
         data: {
-            ...validPayload,
+            studentCode: `${encryptedStudentCode.ciphertext}.${encryptedStudentCode.iv}`,
+            hash_studentCode: sha256(validPayload.studentCode),
+            username: validPayload.username,
+            gender: validPayload.gender,
+            email: `${encryptedEmail.ciphertext}.${encryptedEmail.iv}`,
+            hash_email: sha256(validPayload.email),
+            private_key: `${encryptedPK.ciphertext}.${encryptedPK.iv}`,
             password: hashSync(validPayload.password, saltOfRound),
         },
     });
@@ -549,12 +596,30 @@ const getStudentDTOs = async (): Promise<StudentDTO[]> => {
             phoneNumber: true,
             email: true,
             class: true,
+            private_key: true,
             createdAt: true,
             deletedAt: true,
         },
     });
 
-    return students;
+    const decryptedStudents: StudentDTO[] = students.map((student) => {
+        const plainPK = decryptField(student.private_key, config.MASTER_KEY);
+
+        return {
+            studentId: student.studentId,
+            studentCode: decryptField(student.studentCode, plainPK!) as string,
+            username: student.username,
+            gender: student.gender,
+            birthPlace: decryptField(student.birthPlace, plainPK!),
+            phoneNumber: decryptField(student.phoneNumber, plainPK!),
+            email: decryptField(student.email, plainPK!) as string,
+            class: decryptField(student.class, plainPK!),
+            createdAt: student.createdAt,
+            deletedAt: student.deletedAt,
+        };
+    });
+
+    return decryptedStudents;
 };
 
 const getStudentByStudentCode = async (
@@ -562,7 +627,7 @@ const getStudentByStudentCode = async (
 ): Promise<Student | null> => {
     const student = await prisma.student.findFirst({
         where: {
-            studentCode: studentCode,
+            hash_studentCode: sha256(studentCode),
         },
     });
 
@@ -584,7 +649,7 @@ const getStudentDTOByStudentCode = async (
 ): Promise<StudentDTO | null> => {
     const student = await prisma.student.findFirst({
         where: {
-            studentCode: studentCode,
+            hash_studentCode: sha256(studentCode),
         },
         select: {
             studentId: true,
@@ -604,10 +669,10 @@ const getStudentDTOByStudentCode = async (
 };
 
 const getValidStudent = async (
-    email: string,
+    studentCode: string,
     password: string
 ): Promise<Student> => {
-    const findByStudentCode = await getStudentByStudentCode(email);
+    const findByStudentCode = await getStudentByStudentCode(studentCode);
 
     if (!findByStudentCode)
         throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
@@ -643,12 +708,7 @@ const loginAsStudent = async (
         validPayload.password
     );
 
-    const payload: UserInToken = {
-        userId: validStudent.studentId,
-        username: validStudent.username,
-        role: UserRole.STUDENT,
-        email: validStudent.email,
-    };
+    const payload: UserInToken = createStudentTokenPayload(validStudent);
 
     //create AT, RT
     const accessToken: string | null = jwtService.generateAuthToken(
@@ -702,17 +762,27 @@ const updateStudent = async (
             );
     }
 
+    const student = await getStudentById(studentId);
+    if (!student) {
+        throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
+    }
+    const plainPK = decryptField(student.private_key, config.MASTER_KEY);
+
     await prisma.student.update({
         where: {
             studentId: studentId,
         },
         data: {
-            studentCode: validPayload.studentCode,
+            studentCode: encryptField(validPayload.studentCode, plainPK!) as
+                | string
+                | undefined,
+            hash_studentCode:
+                validPayload.studentCode && sha256(validPayload.studentCode),
             username: validPayload.username,
             gender: validPayload.gender,
-            birthPlace: validPayload.birthPlace,
-            phoneNumber: validPayload.phoneNumber,
-            class: validPayload.class,
+            birthPlace: encryptField(validPayload.birthPlace, plainPK!),
+            phoneNumber: encryptField(validPayload.phoneNumber, plainPK!),
+            class: encryptField(validPayload.class, plainPK!),
         },
     });
 };
@@ -812,6 +882,19 @@ const checkStudentLockStatus = async (studentId: string): Promise<boolean> => {
     return student != null && student.lockStatus == true;
 };
 
+const encryptField = (field: string | null | undefined, key: string) => {
+    if (!field) return field;
+    const {ciphertext, iv} = aesHelper.encrypt(field!, key);
+    return `${ciphertext}.${iv}`;
+};
+
+const decryptField = (encrypted: string | null | undefined, key: string) => {
+    if (!encrypted) return null;
+    const [data, iv] = encrypted.split(".");
+    if (!data || !iv) return null;
+    return aesHelper.decrypt(data, key, iv);
+};
+
 export default {
     // admin
     insertAdmin,
@@ -821,9 +904,13 @@ export default {
     deleteAdmin,
     getAdminDTO,
     updateAdmin,
-    insertStudents,
     // student
+    insertStudent,
+    updateStudent,
+    updateStudentPassword,
     getStudentDTOs,
+    getStudentPK,
+    decryptStudent,
     loginAsStudent,
     refreshStudentToken,
     logoutAsStudent,
@@ -831,8 +918,6 @@ export default {
     getStudentDTO,
     getStudentDTOByEmail,
     getStudentDTOByStudentCode,
-    updateStudent,
-    updateStudentPassword,
     checkUserPasswordMatch,
     checkStudentLockStatus,
     updateStudentLockStatus,

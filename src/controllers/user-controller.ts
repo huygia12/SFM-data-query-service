@@ -197,7 +197,7 @@ const updateAdminInfo = async (req: Request, res: Response) => {
 const signupAsStudent = async (req: Request, res: Response) => {
     const reqBody = req.body as StudentSignup;
 
-    await userService.insertStudents(reqBody);
+    await userService.insertStudent(reqBody);
 
     res.status(StatusCodes.CREATED).json({
         message: ResponseMessage.SUCCESS,
@@ -330,9 +330,11 @@ const getStudent = async (req: Request, res: Response) => {
         throw new UserNotFoundError(ResponseMessage.USER_NOT_FOUND);
     }
 
+    const pk = await userService.getStudentPK(studentId);
+
     res.status(StatusCodes.OK).json({
         message: ResponseMessage.SUCCESS,
-        info: student,
+        info: userService.decryptStudent(pk!, student),
     });
 };
 
